@@ -1,104 +1,76 @@
 import torch
 import math
-from progressbar import progressbar
+import torch.nn as nn
+import torch.nn.functional as F
 
 
-class Encoder(torch.nn.Module):
+class Encoder(nn.Module):
 
-    def __init__(self, input_dim=104, representation_dim=8, sensitive_dim=1):
+    def __init__(self):
         super(Encoder, self).__init__()
-
-        self.representation_dim = representation_dim
-        self.sensitive_dim = sensitive_dim
-
-        self.f = torch.nn.Sequential(
-            torch.nn.Linear(input_dim + sensitive_dim, 100),
-            torch.nn.ReLU(),
-            torch.nn.Linear(100, 2 * representation_dim)
+        self.layers = nn.Sequential(
+            nn.Conv2d(3, 5, kernel_size=5, padding=2),
+            nn.BatchNorm2d(5),
+            nn.ReLU6(inplace=True),
+            nn.Conv2d(5, 50, kernel_size=5, padding=2),
+            nn.BatchNorm2d(50),
+            nn.ReLU6(inplace=True),
+            nn.Conv2d(50, 3, kernel_size=5, padding=2),
         )
 
-    def forward(self, x, y):
-        z_mu_logvar = self.f(torch.cat((x, y.view(-1, self.sensitive_dim)), 1))
-        mu = z_mu_logvar[:, :self.representation_dim]
-        logvar = z_mu_logvar[:, self.representation_dim:]
-        z = torch.randn_like(mu) * logvar + mu
-        return z, (mu, logvar)
+        # logvar
+        self.z_logvar = torch.nn.Parameter(torch.Tensor([-1.0]))
+
+    def reparameterize(self, z_mu, z_logvar):
+        std = torch.exp(0.5 * z_logvar)
+        eps = torch.randn_like(std)
+        return z_mu + eps * std
+
+    def forward(self, x):
+        z_mu = self.layers(x)
+        z = self.reparameterize(z_mu, self.z_logvar)
+        return z, z_mu
 
 
-class Decoder(torch.nn.Module):
-
-    def __init__(self, output_dim=104, representation_dim=8, sensitive_dim=1):
+class Decoder(nn.Module):
+    def __init__(self, dim_s):
         super(Decoder, self).__init__()
+        # conv
+        self.conv1 = nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
 
-        self.sensitive_dim = sensitive_dim
+        # prediction
+        self.fc1 = nn.Linear(64 * 7 * 7 + dim_s, 128)
+        self.fc2 = nn.Linear(128, 10)
 
-        self.f = torch.nn.Sequential(
-            torch.nn.Linear(representation_dim + sensitive_dim, 100),
-            torch.nn.ReLU(),
-            torch.nn.Linear(100, output_dim)
-        )
+    def forward(self, z, s):
+        z = F.relu(self.conv1(z))
+        z = self.pool(z)
+        z = F.relu(self.conv2(z))
+        z = self.pool(z)
 
-    def forward(self, z, y):
-        return self.f(torch.cat((z, y.view(-1, self.sensitive_dim)), 1))
+        z = z.view(z.size(0), -1)
+        s_expanded = s.unsqueeze(1)
+        z = torch.cat((z, s_expanded), dim=1)
 
+        z = F.relu(self.fc1(z))
+        output = self.fc2(z)
+        return output
 
-class VAE(torch.nn.Module):
-
-    def __init__(self, input_dim=104, representation_dim=2, output_dim=[1], output_type=['classes'],
-                 sensitive_dim=1, beta=1.0):
+class VAE(nn.Module):
+    def __init__(self, dim_s):
         super(VAE, self).__init__()
+        self.encoder = Encoder()
+        self.decoder = Decoder(dim_s)
 
-        self.beta = beta
+    def get_kl(self, z_mu):
+        log_var = 0.5 * self.encoder.z_logvar
+        kl_div = -0.5 * torch.sum(1.0 + log_var - torch.pow(z_mu, 2) - torch.exp(log_var))
+        return kl_div / math.log(2)  # in bits
 
-        self.output_type = output_type
-        self.output_dim = output_dim
-        self.output_len = sum(output_dim)
-        self.sensitive_dim = sensitive_dim
+    def get_ce(self, output, u):
+        u = u.view(-1).long()
+        CE = nn.functional.cross_entropy(output, u, reduction='sum')
+        return CE
 
-        self.encoder = Encoder(input_dim, representation_dim, self.sensitive_dim)
-        self.decoder = Decoder(self.output_len, representation_dim, self.sensitive_dim)
-
-    def get_reconstruction(self, x_hat, x_out):
-
-        H_output_given_ZY_ub = 0
-        dim_start_out = 0
-        dim_start_x = 0
-        reg_start = 0
-
-        for output_type_, output_dim_ in zip(self.output_type, self.output_dim):
-
-            if output_type_ == 'classes':
-                so = dim_start_out
-                eo = dim_start_out + output_dim_
-                sx = dim_start_x
-                ex = dim_start_x + 1
-                CE = torch.nn.functional.cross_entropy(x_hat[:, so:eo], x_out[:, sx:ex].long().view(-1),
-                                                       reduction='sum')
-            elif output_type_ == 'binary':
-                so = dim_start_out
-                eo = dim_start_out + 1
-                sx = dim_start_x
-                ex = dim_start_x + 1
-                CE = torch.nn.functional.binary_cross_entropy_with_logits(x_hat[:, so:eo].view(-1),
-                                                                          x_out[:, sx:ex].view(-1), reduction='sum')
-            elif output_type_ == 'image':
-                ex = ex = 0
-                CE = torch.nn.functional.binary_cross_entropy(x_hat, x_out, reduction='sum')
-            else:  # regression
-                so = dim_start_out
-                eo = dim_start_out + output_dim_
-                sx = dim_start_x
-                ex = dim_start_x + output_dim_
-                CE = 0.5 * torch.sum(math.log(2 * math.pi) + 1 + torch.pow(x_hat[:, so:eo] - x_out[:, sx:ex], 2))
-
-            H_output_given_ZY_ub += CE / math.log(2)  # in bits
-
-            dim_start_out = eo
-            dim_start_x = ex
-
-        return - H_output_given_ZY_ub
-
-    def get_kl(self, z_mu, z_logvar):
-
-        Dkl = -0.5 * torch.sum(1.0 + z_logvar - torch.pow(z_mu, 2) - torch.exp(z_logvar))
-        return Dkl / math.log(2)  # in bits

@@ -5,8 +5,10 @@ config_dict = {
     "dim_z": 20,
     "dim_u": 10,
     "epochs": 8,
-    "alpha": 1.0,
-    "beta": 1.0,
     "pretrain_epoch": 20,
-    "batch_size": 64
+    "batch_size": 64,
+    "alpha": 0.5,
+    "eval_dir": 'eval_tsne',
+    "sample_dir": 'sample',
+    "mi_epochs": 20
 }
