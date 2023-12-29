@@ -2,6 +2,7 @@ import torch
 import math
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
 
 
 class Encoder(nn.Module):
@@ -73,4 +74,25 @@ class VAE(nn.Module):
         u = u.view(-1).long()
         CE = nn.functional.cross_entropy(output, u, reduction='sum')
         return CE
+
+    def get_conditional_entropy(self, u, s, uvals=3, svals=10):
+        if torch.is_tensor(s):
+            s = s.detach().view(-1).numpy()
+        u_pred = torch.argmax(u, dim=1)
+        if torch.is_tensor(u_pred):
+            u_pred = u_pred.detach().numpy()
+        us_emp = np.zeros((uvals, svals))
+        s_emp = np.zeros(svals)
+        for j in range(svals):
+            s_emp[j] = (s == j).sum().astype(float)
+            for i in range(uvals):
+                us_emp[i, j] = ((u_pred == i) & (s == j)).sum().astype(float)
+
+        # avoid nan
+        epsilon = 1e-10
+        prob_su = (us_emp + epsilon) / (np.sum(us_emp) + epsilon)
+        prob_s = (s_emp + epsilon) / (np.sum(s_emp) + epsilon)
+
+        H_t_given_s = - np.sum(prob_su * np.log((prob_su + epsilon) / (prob_s + epsilon))) / math.log(2)
+        return H_t_given_s
 

@@ -39,7 +39,8 @@ def train():
 
             kl_div = vae.get_kl(z_mu)
             ce_loss = vae.get_ce(u_hat, u)
-            loss = kl_div + alpha * ce_loss
+            cndtn_entropy_loss = vae.get_conditional_entropy(u_hat, s)
+            loss = kl_div + alpha * (ce_loss - cndtn_entropy_loss)
             loss.backward()
             optimizer.step()
 
@@ -50,8 +51,9 @@ def train():
             u_hat_np.extend(u_hat_cpu)
 
             if (itrt + 1) % 10 == 0:
-                print("Epoch[{}/{}], Step [{}/{}], BCE Loss: {:.4f}, KL Div: {:.4f}"
-                      .format(epoch + 1, epoch, itrt + 1, len(train_loader), ce_loss.item(),
+                print("Epoch[{}/{}], Step [{}/{}], Conditional_entropy Loss: {:.4f},\
+                Cross_entropy Loss: {:.4f}, KL Div: {:.4f}"
+                      .format(epoch + 1, epochs, itrt + 1, len(train_loader), cndtn_entropy_loss.item(), ce_loss.item(),
                               kl_div.item()))
                 # save for T-SNE
                 if not os.path.exists(eval_dir):
@@ -62,8 +64,6 @@ def train():
                     os.remove(eval_dir + "/eval_pred_label.npy")
                 np.save(eval_dir + "/eval_true_label.npy", u_np)
                 np.save(eval_dir + "/eval_pred_label.npy", u_hat_np)
-
-        print(f'Epoch {epoch + 1}/{epochs}, Loss: {loss.item()}')
 
         with torch.no_grad():
             # save imgs of each epoch
