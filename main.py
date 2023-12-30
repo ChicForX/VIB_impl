@@ -37,10 +37,10 @@ def train():
             z, z_mu = vae.encoder(x)
             u_hat = vae.decoder(z, s)
 
-            kl_div = vae.get_kl(z_mu)
-            ce_loss = vae.get_ce(u_hat, u)
-            cndtn_entropy_loss = vae.get_conditional_entropy(u_hat, s)
-            loss = kl_div + alpha * (ce_loss - cndtn_entropy_loss)
+            kl_div = 1e-2 * vae.get_kl(z_mu)
+            ce_loss = alpha * vae.get_ce(u_hat, u)
+            cndtn_entropy_loss = 60 * alpha * vae.get_conditional_entropy(u_hat, s)
+            loss = kl_div + ce_loss - cndtn_entropy_loss
             loss.backward()
             optimizer.step()
 
@@ -51,10 +51,9 @@ def train():
             u_hat_np.extend(u_hat_cpu)
 
             if (itrt + 1) % 10 == 0:
-                print("Epoch[{}/{}], Step [{}/{}], Conditional_entropy Loss: {:.4f},\
-                Cross_entropy Loss: {:.4f}, KL Div: {:.4f}"
-                      .format(epoch + 1, epochs, itrt + 1, len(train_loader), cndtn_entropy_loss.item(), ce_loss.item(),
-                              kl_div.item()))
+                print("Epoch[{}/{}], Step [{}/{}], Conditional_entropy Loss: {:.4f}, Cross_entropy Loss: {:.4f}, "
+                      "KL Div: {:.4f}".format(epoch + 1, epochs, itrt + 1, len(train_loader),
+                                              cndtn_entropy_loss.item(), ce_loss.item(),kl_div.item()))
                 # save for T-SNE
                 if not os.path.exists(eval_dir):
                     os.mkdir(eval_dir)
@@ -69,7 +68,7 @@ def train():
             # save imgs of each epoch
             utils.save_imgs(x, vae, epoch)
 
-    utils.eval_tsne_image()
+    utils.eval_tsne_image(epoch)
 
 
 def tst(model, test_loader):
@@ -97,7 +96,8 @@ def tst(model, test_loader):
 
 
 if __name__ == "__main__":
+    utils.tsne_image_before_training(train_loader)
     if not os.path.exists(sample_dir):
         os.makedirs(sample_dir)
     train()
-    tst(vae, test_loader)
+    # tst(vae, test_loader)

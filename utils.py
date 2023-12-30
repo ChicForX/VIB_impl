@@ -16,7 +16,7 @@ eval_dir = config_dict['eval_dir']
 sample_dir = config_dict['sample_dir']
 
 
-def show_images(loader):
+def show_mnist_images(loader):
     images, labels, colors = next(iter(loader))
 
     plt.figure(figsize=(10, 10))
@@ -27,6 +27,7 @@ def show_images(loader):
         plt.title(f'Label: {labels[i]}')
         plt.axis('off')
     plt.show()
+
 
 # privacy prediction
 def evaluate_private_representations(encoder, train_dataset, test_dataset, device):
@@ -61,13 +62,45 @@ def save_imgs(x, model, epoch):
     save_image(x_concat, os.path.join(sample_dir, 'reconst-{}.png'.format(epoch + 1)))
 
 
+# Perform t-SNE before training
+def tsne_image_before_training(train_loader, num_samples=1000):
+    images, colors = extract_samples_from_loader(train_loader, num_samples)
+    num_samples = min(num_samples, images.shape[0])
+
+    data = images[:num_samples].view(num_samples, -1).numpy()
+    labels = colors[:num_samples].numpy()
+
+    fig, ax = plt.subplots(1, figsize=(8, 6))
+    plotdistribution(labels, data, [ax], map_color={0: 'red', 1: 'green', 2: 'blue'})
+    plt.show()
+
+
+def extract_samples_from_loader(data_loader, num_samples=1000):
+    images_list = []
+    colors_list = []
+    accumulated_samples = 0
+
+    for images, _, colors in data_loader:
+        batch_size = images.size(0)
+        images_list.append(images)
+        colors_list.append(colors)
+        accumulated_samples += batch_size
+        if accumulated_samples >= num_samples:
+            break
+
+    images = torch.cat(images_list, dim=0)
+    colors = torch.cat(colors_list, dim=0)
+    return images, colors
+
 # Perform t-SNE on the latent variables
 # & show reconstruction image of first and last epoch
-def eval_tsne_image():
+def eval_tsne_image(epoch):
     fig, ax = plt.subplots(1, 3)
     eval_true_label = np.load(eval_dir + "/eval_true_label.npy")
     eval_pred_label = np.load(eval_dir + "/eval_pred_label.npy")
-    plotdistribution(eval_true_label, eval_pred_label, ax)
+    plotdistribution(eval_true_label, eval_pred_label, ax,
+                     map_color={0: 'r', 1: 'g', 2: 'b', 3: 'y', 4: 'k', 5: 'm', 6: 'c', 7: 'pink', 8: 'grey',
+                                9: 'blueviolet'})
 
     # Display reconst-1 and reconst-15 images
     image_1 = mpimg.imread(sample_dir + '/reconst-1.png')
@@ -75,22 +108,24 @@ def eval_tsne_image():
     ax[1].imshow(image_1)
     ax[1].set_axis_off()
 
-    image_epoch = mpimg.imread(sample_dir + '/reconst-15.png')
+    image_epoch = mpimg.imread(sample_dir + '/reconst-' + str(epoch) + '.png')
     plt.subplot(1, 3, 3)
     ax[2].imshow(image_epoch)
     ax[2].set_axis_off()
     plt.show()
 
-def plotdistribution(Label, Mat, ax):
+
+def plotdistribution(Label, Mat, ax, map_color):
     warnings.filterwarnings('ignore', category=FutureWarning)
     tsne = TSNE(n_components=2, random_state=0)
     Mat = tsne.fit_transform(Mat[:])
 
     x = Mat[:, 0]
     y = Mat[:, 1]
-    map_color = {0: 'r', 1: 'g',2:'b',3:'y',4:'k',5:'m',6:'c',7:'pink',8:'grey',9:'blueviolet'}
+
     color = list(map(lambda x: map_color[x], Label))
-    ax[0].scatter(np.array(x), np.array(y), s=5, c=color, marker='o')  # The scatter function only supports array type data
+    ax[0].scatter(np.array(x), np.array(y), s=5, c=color,
+                  marker='o')  # The scatter function only supports array type data
     ax[0].set_axis_on()
 
     # add labels
@@ -99,6 +134,7 @@ def plotdistribution(Label, Mat, ax):
         legend_elements.append(
             Line2D([0], [0], marker='o', color='w', markerfacecolor=color, markersize=5, label=label))
     ax[0].legend(handles=legend_elements, title='Label', loc='upper right', handlelength=0.8, handleheight=0.8)
+
 
 # train mine
 def train_mine(model, mine, train_loader, epochs=20):
@@ -119,7 +155,3 @@ def train_mine(model, mine, train_loader, epochs=20):
 
         if epoch % 50 == 0:
             print(f"Epoch {epoch}, MI Estimate: {-total_loss / len(train_loader)}")
-
-
-
-

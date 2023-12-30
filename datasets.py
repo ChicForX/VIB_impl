@@ -2,7 +2,7 @@ import torch
 from torchvision import datasets, transforms
 import numpy as np
 from config import config_dict
-from utils import show_images
+from utils import show_mnist_images
 
 batch_size = config_dict['batch_size']
 
@@ -73,4 +73,4 @@ train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size,
 test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
 # draw origin data
-#show_images(test_loader)
+#show_mnist_images(test_loader)
