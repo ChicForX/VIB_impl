@@ -62,19 +62,6 @@ def save_imgs(x, model, epoch):
     save_image(x_concat, os.path.join(sample_dir, 'reconst-{}.png'.format(epoch + 1)))
 
 
-# Perform t-SNE before training
-def tsne_image_before_training(train_loader, num_samples=1000):
-    images, colors = extract_samples_from_loader(train_loader, num_samples)
-    num_samples = min(num_samples, images.shape[0])
-
-    data = images[:num_samples].view(num_samples, -1).numpy()
-    labels = colors[:num_samples].numpy()
-
-    fig, ax = plt.subplots(1, figsize=(8, 6))
-    plotdistribution(labels, data, [ax], map_color={0: 'red', 1: 'green', 2: 'blue'})
-    plt.show()
-
-
 def extract_samples_from_loader(data_loader, num_samples=1000):
     images_list = []
     colors_list = []
@@ -94,24 +81,28 @@ def extract_samples_from_loader(data_loader, num_samples=1000):
 
 # Perform t-SNE on the latent variables
 # & show reconstruction image of first and last epoch
-def eval_tsne_image(epoch):
-    fig, ax = plt.subplots(1, 3)
+def eval_tsne_image(epoch, train_loader, num_samples=1000):
+    fig, axs = plt.subplots(1, 3)
+
+    # tsne of mnist before training
+    images, colors = extract_samples_from_loader(train_loader, num_samples)
+    num_samples = min(num_samples, images.shape[0])
+    data = images[:num_samples].view(num_samples, -1).numpy()
+    labels = colors[:num_samples].numpy()
+    plotdistribution(labels, data, [axs[0]], map_color={0: 'red', 1: 'green', 2: 'blue'})
+
+    # tsn of mnist after training
     eval_true_label = np.load(eval_dir + "/eval_true_label.npy")
     eval_pred_label = np.load(eval_dir + "/eval_pred_label.npy")
-    plotdistribution(eval_true_label, eval_pred_label, ax,
+    plotdistribution(eval_true_label, eval_pred_label, [axs[1]],
                      map_color={0: 'r', 1: 'g', 2: 'b', 3: 'y', 4: 'k', 5: 'm', 6: 'c', 7: 'pink', 8: 'grey',
                                 9: 'blueviolet'})
 
-    # Display reconst-1 and reconst-15 images
-    image_1 = mpimg.imread(sample_dir + '/reconst-1.png')
-    plt.subplot(1, 3, 2)
-    ax[1].imshow(image_1)
-    ax[1].set_axis_off()
-
-    image_epoch = mpimg.imread(sample_dir + '/reconst-' + str(epoch) + '.png')
+    # Display reconst-15 images
+    image_epoch = mpimg.imread(sample_dir + '/reconst-' + str(epoch+1) + '.png')
     plt.subplot(1, 3, 3)
-    ax[2].imshow(image_epoch)
-    ax[2].set_axis_off()
+    axs[2].imshow(image_epoch)
+    axs[2].set_axis_off()
     plt.show()
 
 

@@ -68,7 +68,7 @@ def train():
             # save imgs of each epoch
             utils.save_imgs(x, vae, epoch)
 
-    utils.eval_tsne_image(epoch)
+    utils.eval_tsne_image(epoch, train_loader)
 
 
 def tst(model, test_loader):
@@ -96,7 +96,6 @@ def tst(model, test_loader):
 
 
 if __name__ == "__main__":
-    utils.tsne_image_before_training(train_loader)
     if not os.path.exists(sample_dir):
         os.makedirs(sample_dir)
     train()
