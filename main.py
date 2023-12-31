@@ -26,7 +26,15 @@ mi_epochs = config_dict['mi_epochs']
 vae = VAE(dim_s).to(device)
 optimizer = torch.optim.Adam(vae.parameters(), lr=lr)
 
+# mutual information estimation
+mine1 = MINE().to(device)
+mine2 = MINE().to(device)
+optimizer1 = torch.optim.Adam(mine1.parameters(), lr=0.001)
+optimizer2 = torch.optim.Adam(mine2.parameters(), lr=0.001)
+
+
 def train():
+
     for epoch in range(epochs):
         u_np = []
         u_hat_np = []
@@ -64,35 +72,31 @@ def train():
                 np.save(eval_dir + "/eval_true_label.npy", u_np)
                 np.save(eval_dir + "/eval_pred_label.npy", u_hat_np)
 
+            with torch.no_grad():
+                mine1.train()
+                mine2.train()
+                mi_z_s, mi_z_u = mine_eval(vae, z, u, s, len(test_loader))
+                print(f"Epoch {epoch}, I(Z, S): {-mi_z_s}, I(Z, U): {-mi_z_u}")
+
+
         with torch.no_grad():
             # save imgs of each epoch
             utils.save_imgs(x, vae, epoch)
 
+
     utils.eval_tsne_image(epoch, train_loader)
 
 
-def tst(model, test_loader):
-    vae.eval()
+def mine_eval(model, z_batch, u_batch, s_batch, len):
+    # train & calculate mutual information
+    # s & z
+    mi_z_s = mine1.train_mine_inside_epoch(z_batch, s_batch, optimizer1)
+    # u & z
+    mi_z_u = mine2.train_mine_inside_epoch(z_batch, u_batch, optimizer2)
 
-    # train MINE
-    mine = MINE(dim_z, dim_u).to(device)
-    utils.train_mine(model, mine, test_loader, mi_epochs)
-    total_mi_s_z = 0
-    total_mi_u_z = 0
-
-    with torch.no_grad():
-        for x, u, s in test_loader:
-            z_test = model.encoder(x)
-            # calculate mutual information
-            # s & z
-            total_mi_s_z += mine(z_test, s).mean().item()
-            # u & z
-            total_mi_u_z += mine(z_test, u).mean().item()
-
-        avg_mi_s_z = total_mi_s_z / len(test_loader)
-        avg_mi_u_z = total_mi_u_z / len(test_loader)
-        print(f"Mutual Information of s & z: {avg_mi_s_z}")
-        print(f"Mutual Information of u & z: {avg_mi_u_z}")
+    avg_mi_z_s = mi_z_s / len
+    avg_mi_z_u = mi_z_u / len
+    return avg_mi_z_s, avg_mi_z_u
 
 
 if __name__ == "__main__":

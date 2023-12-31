@@ -125,24 +125,3 @@ def plotdistribution(Label, Mat, ax, map_color):
         legend_elements.append(
             Line2D([0], [0], marker='o', color='w', markerfacecolor=color, markersize=5, label=label))
     ax[0].legend(handles=legend_elements, title='Label', loc='upper right', handlelength=0.8, handleheight=0.8)
-
-
-# train mine
-def train_mine(model, mine, train_loader, epochs=20):
-    print("MINE starts training.")
-
-    optimizer = torch.optim.Adam(mine.parameters(), lr=0.001)
-
-    for epoch in range(epochs):
-        total_loss = 0
-        for x_batch, u_batch, _ in train_loader:
-            z_batch, _ = model.encoder(x_batch)
-            optimizer.zero_grad()
-            mi_estimate = mine(z_batch, u_batch)
-            loss = -torch.mean(mi_estimate)
-            loss.backward()
-            optimizer.step()
-            total_loss += loss.item()
-
-        if epoch % 50 == 0:
-            print(f"Epoch {epoch}, MI Estimate: {-total_loss / len(train_loader)}")
