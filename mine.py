@@ -28,6 +28,7 @@ class MINE(nn.Module):
 
     def forward(self, z, s):
         z = self.conv_layers(z)
+        s = s.float()
         s = self.fc_s(s.unsqueeze(1))
         combined = torch.cat((z, s), 1)
         return self.fc_combined(combined)

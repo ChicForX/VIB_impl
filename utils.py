@@ -99,7 +99,7 @@ def eval_tsne_image(epoch, train_loader, num_samples=1000):
                                 9: 'blueviolet'})
 
     # Display reconst-15 images
-    image_epoch = mpimg.imread(sample_dir + '/reconst-' + str(epoch+1) + '.png')
+    image_epoch = mpimg.imread(sample_dir + '/reconst-' + str(epoch) + '.png')
     plt.subplot(1, 3, 3)
     axs[2].imshow(image_epoch)
     axs[2].set_axis_off()
@@ -125,3 +125,13 @@ def plotdistribution(Label, Mat, ax, map_color):
         legend_elements.append(
             Line2D([0], [0], marker='o', color='w', markerfacecolor=color, markersize=5, label=label))
     ax[0].legend(handles=legend_elements, title='Label', loc='upper right', handlelength=0.8, handleheight=0.8)
+
+def plot_mi(mi_z_s_values, mi_z_u_values, epochs):
+    plt.figure(figsize=(10, 5))
+    plt.plot(range(epochs), mi_z_s_values, label='I(Z, S)')
+    plt.plot(range(epochs), mi_z_u_values, label='I(Z, U)')
+    plt.xlabel('Epochs')
+    plt.ylabel('Mutual Information')
+    plt.title('Mutual Information Across Epochs')
+    plt.legend()
+    plt.show()

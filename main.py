@@ -32,6 +32,8 @@ mine2 = MINE().to(device)
 optimizer1 = torch.optim.Adam(mine1.parameters(), lr=0.001)
 optimizer2 = torch.optim.Adam(mine2.parameters(), lr=0.001)
 
+mi_z_s_values = []
+mi_z_u_values = []
 
 def train():
 
@@ -39,6 +41,7 @@ def train():
         u_np = []
         u_hat_np = []
         for itrt, (x, u, s) in enumerate(train_loader):
+            vae.train()
             x, u, s = x.to(device), u.to(device), s.to(device)
             optimizer.zero_grad()
 
@@ -72,22 +75,21 @@ def train():
                 np.save(eval_dir + "/eval_true_label.npy", u_np)
                 np.save(eval_dir + "/eval_pred_label.npy", u_hat_np)
 
-            with torch.no_grad():
-                mine1.train()
-                mine2.train()
-                mi_z_s, mi_z_u = mine_eval(vae, z, u, s, len(test_loader))
-                print(f"Epoch {epoch}, I(Z, S): {-mi_z_s}, I(Z, U): {-mi_z_u}")
+            vae.eval()
+            mine1.train()
+            mine2.train()
+            mi_z_s, mi_z_u = mine_eval(z.detach(), u.detach(), s.detach(), len(test_loader))
+            mi_z_s_values.append(mi_z_s)
+            mi_z_u_values.append(mi_z_u)
+            # print(f"Epoch {epoch}, I(Z, S): {-mi_z_s}, I(Z, U): {-mi_z_u}")
 
-
+        vae.eval()
         with torch.no_grad():
             # save imgs of each epoch
             utils.save_imgs(x, vae, epoch)
 
 
-    utils.eval_tsne_image(epoch, train_loader)
-
-
-def mine_eval(model, z_batch, u_batch, s_batch, len):
+def mine_eval( z_batch, u_batch, s_batch, len):
     # train & calculate mutual information
     # s & z
     mi_z_s = mine1.train_mine_inside_epoch(z_batch, s_batch, optimizer1)
@@ -103,4 +105,5 @@ if __name__ == "__main__":
     if not os.path.exists(sample_dir):
         os.makedirs(sample_dir)
     train()
-    # tst(vae, test_loader)
+    utils.eval_tsne_image(epochs, train_loader)
+    utils.plot_mi(mi_z_s_values, mi_z_u_values, epochs)
