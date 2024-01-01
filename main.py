@@ -7,7 +7,6 @@ import os
 from mine import MINE
 import numpy as np
 
-
 # hyperparams
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 epochs = config_dict['epochs']
@@ -31,15 +30,15 @@ mine1 = MINE().to(device)
 mine2 = MINE().to(device)
 optimizer1 = torch.optim.Adam(mine1.parameters(), lr=0.001)
 optimizer2 = torch.optim.Adam(mine2.parameters(), lr=0.001)
-
 mi_z_s_values = []
 mi_z_u_values = []
 
 def train():
-
     for epoch in range(epochs):
         u_np = []
         u_hat_np = []
+        total_mi_z_s = 0
+        total_mi_z_u = 0
         for itrt, (x, u, s) in enumerate(train_loader):
             vae.train()
             x, u, s = x.to(device), u.to(device), s.to(device)
@@ -64,7 +63,7 @@ def train():
             if (itrt + 1) % 10 == 0:
                 print("Epoch[{}/{}], Step [{}/{}], Conditional_entropy Loss: {:.4f}, Cross_entropy Loss: {:.4f}, "
                       "KL Div: {:.4f}".format(epoch + 1, epochs, itrt + 1, len(train_loader),
-                                              cndtn_entropy_loss.item(), ce_loss.item(),kl_div.item()))
+                                              cndtn_entropy_loss.item(), ce_loss.item(), kl_div.item()))
                 # save for T-SNE
                 if not os.path.exists(eval_dir):
                     os.mkdir(eval_dir)
@@ -76,29 +75,23 @@ def train():
                 np.save(eval_dir + "/eval_pred_label.npy", u_hat_np)
 
             vae.eval()
-            mine1.train()
-            mine2.train()
-            mi_z_s, mi_z_u = mine_eval(z.detach(), u.detach(), s.detach(), len(test_loader))
-            mi_z_s_values.append(mi_z_s)
-            mi_z_u_values.append(mi_z_u)
-            # print(f"Epoch {epoch}, I(Z, S): {-mi_z_s}, I(Z, U): {-mi_z_u}")
+            if epoch <= 4:
+                mine1.train()
+                mine2.train()
+                mine1.train_mine_inside_epoch(z.detach(), s.detach(), optimizer1)
+                mine2.train_mine_inside_epoch(z.detach(), u.detach(), optimizer2)
+            total_mi_z_s += mine1.get_mi(z.detach(), s.detach())
+            total_mi_z_u += mine2.get_mi(z.detach(), u.detach())
 
+
+        if epoch > 4:
+            mi_z_s_values.append(total_mi_z_s / itrt)
+            mi_z_u_values.append(total_mi_z_u / itrt)
+            print(f"Epoch {epoch + 1}, I(Z, S): {total_mi_z_s / itrt}, I(Z, U): {total_mi_z_u / itrt}")
         vae.eval()
         with torch.no_grad():
             # save imgs of each epoch
             utils.save_imgs(x, vae, epoch)
-
-
-def mine_eval( z_batch, u_batch, s_batch, len):
-    # train & calculate mutual information
-    # s & z
-    mi_z_s = mine1.train_mine_inside_epoch(z_batch, s_batch, optimizer1)
-    # u & z
-    mi_z_u = mine2.train_mine_inside_epoch(z_batch, u_batch, optimizer2)
-
-    avg_mi_z_s = mi_z_s / len
-    avg_mi_z_u = mi_z_u / len
-    return avg_mi_z_s, avg_mi_z_u
 
 
 if __name__ == "__main__":
@@ -106,4 +99,4 @@ if __name__ == "__main__":
         os.makedirs(sample_dir)
     train()
     utils.eval_tsne_image(epochs, train_loader)
-    utils.plot_mi(mi_z_s_values, mi_z_u_values, epochs)
+    utils.plot_mi(mi_z_s_values, mi_z_u_values)

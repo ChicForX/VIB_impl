@@ -4,7 +4,7 @@ config_dict = {
     "dim_s": 1,
     "dim_z": 20,
     "dim_u": 10,
-    "epochs": 14,
+    "epochs": 10,
     "pretrain_epoch": 10,
     "batch_size": 128,
     "alpha": 70,

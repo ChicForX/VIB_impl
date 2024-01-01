@@ -126,10 +126,12 @@ def plotdistribution(Label, Mat, ax, map_color):
             Line2D([0], [0], marker='o', color='w', markerfacecolor=color, markersize=5, label=label))
     ax[0].legend(handles=legend_elements, title='Label', loc='upper right', handlelength=0.8, handleheight=0.8)
 
-def plot_mi(mi_z_s_values, mi_z_u_values, epochs):
+def plot_mi(mi_z_s_values, mi_z_u_values):
+    total_iterations = len(mi_z_s_values)
+    x_axis = list(range(total_iterations))
     plt.figure(figsize=(10, 5))
-    plt.plot(range(epochs), mi_z_s_values, label='I(Z, S)')
-    plt.plot(range(epochs), mi_z_u_values, label='I(Z, U)')
+    plt.plot(x_axis, mi_z_s_values, label='I(Z, S)')
+    plt.plot(x_axis, mi_z_u_values, label='I(Z, U)')
     plt.xlabel('Epochs')
     plt.ylabel('Mutual Information')
     plt.title('Mutual Information Across Epochs')
